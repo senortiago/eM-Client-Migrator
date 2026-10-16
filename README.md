@@ -1,150 +1,151 @@
-# eM Client to Mozilla Thunderbird Migrator
+# eM Client Universal Migrator
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-lightgrey.svg)](#supported-platforms)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-A free, standalone, open-source tool to migrate **all Accounts (settings & credentials)**, **Emails (MBOX format with full attachments & read status)**, **Calendars (.ics)**, and **Contacts (.vcf)** from **eM Client** to **Mozilla Thunderbird**.
+A complete, free, open-source tool with a **friendly graphical user interface (GUI)** to migrate **Accounts, Emails, Subfolders, Calendars, and Contacts** from **eM Client** to:
+1. **Mozilla Thunderbird** (Automated account configuration, native MBOX stores, Unified Folders)
+2. **Microsoft Outlook** (Native Outlook PST generation or live Profile COM automation)
+3. **Standalone Files** (Standard MBOX, EML, ICS calendar, and VCF vCard files)
 
-Commercial migration utilities typically charge \$40–\$80 and only perform clumsy partial exports. This tool performs the entire migration locally, offline, and in seconds—with **zero external pip dependencies**.
+---
+
+## 📸 Friendly Graphical Interface (UI)
+
+Simply run `python main.py` to launch the interactive desktop interface:
+
+```text
++---------------------------------------------------------------------------------+
+|  eM Client Universal Migrator                                                   |
+|  Transfer Accounts, Emails, Folders, Calendars & Contacts to Thunderbird/Outlook|
++---------------------------------------------------------------------------------+
+| 1. Migration Paths & Destination                                                |
+|    eM Client Data:     [ C:\Users\user\AppData\Roaming\eM Client       ] [Browse] |
+|    Target Application: (o) Mozilla Thunderbird  ( ) Microsoft Outlook ( ) Export|
+|    Thunderbird Profile:[ Profiles/xyz.default-release                 ] [Browse] |
++---------------------------------------------------------------------------------+
+| 2. Components to Transfer                                                       |
+|    [x] Account Settings (OAuth2/IMAP/SMTP)   [x] Emails & Folders               |
+|    [x] Calendar Events (.ics)                [x] Contacts / Address Book (.vcf) |
++---------------------------------------------------------------------------------+
+| 3. Select Accounts and Folders to Migrate                                       |
+|    [Select All]  [Deselect All]  [Refresh Tree]                                 |
+|    Account / Folder Name                                               Items    |
+|    -----------------------------------------------------------------------------|
+|    [-] [x] work@company.com                                            4,520    |
+|        [x] INBOX                                                       3,810    |
+|        [x] Sent                                                          690    |
+|        [x] Archive                                                        20    |
+|    [-] [x] personal@gmail.com                                         12,410    |
+|        [x] [Gmail]/All Mail                                           11,900    |
+|        [x] [Gmail]/Sent Mail                                             510    |
++---------------------------------------------------------------------------------+
+|    [========================================] 100%                              |
+|    Status: Migration completed successfully!                                    |
+|    [Log Console: Migrated 16,930 messages to native stores.]                    |
+|                                                            [ ▶ Start Migration ]|
++---------------------------------------------------------------------------------+
+```
 
 ---
 
 ## ✨ Features
 
-- **⚡ Zero Dependencies**: Pure Python 3 standard library. No `pip install` required.
-- **🔄 Complete Account Migration**:
-  - Automatically parses eM Client's `accounts.dat` (SQLite + JSON).
-  - Configures incoming IMAP/POP3 servers, ports, and SSL/TLS encryption in Thunderbird's `prefs.js`.
-  - Configures SMTP outgoing servers and identities.
-  - Automatically enables modern **OAuth2** authentication for Microsoft (Outlook/Live/Hotmail) and Google (Gmail) accounts.
-- **📬 Full Email & Folder Hierarchy Migration**:
-  - Reconstructs complete RFC 822 MIME message trees directly from eM Client's local SQLite database (`LocalMailContents`), preserving nested multipart bodies and all attachments (PDFs, images, ZIPs, etc.).
-  - Exports directly into Thunderbird's native **MBOX** format.
-  - Preserves Read/Unread flags (`X-Mozilla-Status: 0001` vs `0000`).
-  - Deploys mail stores into each account's storage directory (`ImapMail` / `Mail`) and `Local Folders`.
-- **🗂️ Unified Folders Integration**:
-  - Updates Thunderbird's `virtualFolders.dat` and `folderCache.json` so every migrated account automatically participates in **Unified Inbox**, **Unified Sent**, **Unified Trash**, and **Unified Junk/Spam**.
-- **📅 Calendar Migration**:
-  - Extracts all calendar events into a master iCalendar (`eMClient_All_Calendars.ics`) file and individual per-account `.ics` files.
-- **📇 Contacts Migration**:
-  - Exports all address books into a master vCard (`eMClient_All_Contacts.vcf`) file (names, emails, phones, organization, title).
-- **🛡️ Safety & Backups**:
-  - Automatically creates timestamped backups of `prefs.js` before making any changes.
-  - Supports `--dry-run` to preview actions before applying them.
+- **🖥️ Friendly Graphical User Interface (GUI)**:
+  - Interactive treeview to select/deselect specific accounts and individual subfolders.
+  - Component toggles: choose whether to include accounts, emails, calendars, or contacts.
+  - Live progress bar and real-time log console.
+  - Runs in background threads so the UI never hangs.
+- **⚡ Zero External Dependencies for Core & Thunderbird**:
+  - Pure Python 3 standard library (`tkinter`, `sqlite3`, `email`, etc.).
+  - No `pip install` required for standard migrations.
+- **🦅 Target: Mozilla Thunderbird**:
+  - Injects accounts and identities into `prefs.js`.
+  - Configures incoming IMAP/POP3 servers and outgoing SMTP servers.
+  - Automatically enables modern **OAuth2** for Microsoft and Google accounts.
+  - Reassembles full RFC 822 MIME message trees and writes MboxRD with `X-Mozilla-Status` flags (read/unread).
+  - Updates `virtualFolders.dat` and `folderCache.json` so accounts appear in **Unified Folders** (Unified Inbox, Sent, Trash, Junk).
+- **💼 Target: Microsoft Outlook**:
+  - Automatically creates separate `.pst` data files for each account so they appear as first-level peers in Outlook's sidebar.
+  - Maps nested folder paths to Outlook's native folders (e.g. `Εισερχόμενα` / `Inbox`, `Απεσταλμένα` / `Sent`, `Διαγραμμένα` / `Deleted`, `Ανεπιθύμητα` / `Junk`).
+  - Decodes RFC 2047 encoded email subjects (`=?UTF-8?...`).
+  - Detects and preserves HTML bodies and attachments.
+  - *(Requires Windows + `pip install pywin32` for Outlook COM automation)*.
+- **📅 Calendars & 📇 Contacts**:
+  - Master `eMClient_All_Calendars.ics` and per-account `.ics` files.
+  - Master `eMClient_All_Contacts.vcf` (vCard 3.0) and per-account `.vcf` files.
+- **🛡️ Safety First**:
+  - Automatic timestamped backups of `prefs.js`.
+  - Stale process lock checking.
+  - Non-destructive read-only access to eM Client SQLite databases.
 
 ---
 
 ## 🚀 Quick Start
 
-### 1. Close Thunderbird
-Ensure Thunderbird is completely closed so its configuration files can be updated cleanly.
-
-### 2. Run the Migrator
+### 1. Launch the Graphical Interface
 ```bash
-python migrate.py
+python main.py
 ```
+*(Or double-click `main.py` on Windows).*
 
-The script will:
-1. Auto-detect your eM Client data directory.
-2. Auto-detect your active Thunderbird profile.
-3. Back up your Thunderbird `prefs.js`.
-4. Configure all your email accounts.
-5. Reconstruct all historical emails into native MBOX stores.
-6. Register all accounts into Unified Folders.
-7. Export your calendars and contacts to your `Documents/Thunderbird Migration/` folder.
+### 2. Command Line (Headless / Automation)
+You can also run the tool directly from the terminal without the GUI:
+
+```bash
+# Preview what would be migrated
+python main.py --dry-run
+
+# Migrate to Thunderbird (default)
+python main.py --target thunderbird
+
+# Migrate to Microsoft Outlook (PST files)
+python main.py --target outlook
+
+# Export emails to standalone EML files
+python main.py --target export
+```
 
 ---
 
 ## 🛠️ CLI Options
 
 ```text
-usage: migrate.py [-h] [--emclient-path EMCLIENT_PATH] [--tb-profile TB_PROFILE]
-                  [--force] [--dry-run] [--accounts-only] [--mails-only]
-                  [--calendar-only] [--contacts-only]
+usage: main.py [-h] [--gui] [--target {thunderbird,outlook,export}]
+               [--emclient-path PATH] [--tb-profile PATH] [--dry-run]
+               [--mails-only] [--calendar-only] [--contacts-only]
 
-Migrate eM Client data to Mozilla Thunderbird
+eM Client Universal Migrator (Thunderbird & Outlook)
 
 options:
   -h, --help            Show this help message and exit
-  --emclient-path PATH  Path to eM Client data directory (default: auto-detect)
-  --tb-profile PATH     Path to Thunderbird profile directory (default: auto-detect)
-  --force               Automatically terminate running Thunderbird process
-  --dry-run             Preview migration actions without modifying any files
-  --accounts-only       Only migrate account configurations into prefs.js
-  --mails-only          Only migrate emails into MBOX format
-  --calendar-only       Only export calendar events to .ics
-  --contacts-only       Only export contacts to .vcf
-```
-
-### Examples
-
-**Simulate a migration without modifying any files:**
-```bash
-python migrate.py --dry-run
-```
-
-**Force close Thunderbird and run a full migration:**
-```bash
-python migrate.py --force
-```
-
-**Export only calendars and contacts:**
-```bash
-python migrate.py --calendar-only --contacts-only
+  --gui                 Launch the graphical user interface
+  --target {thunderbird,outlook,export}
+                        Migration target (default: thunderbird)
+  --emclient-path PATH  Custom path to eM Client data folder
+  --tb-profile PATH     Custom path to Thunderbird profile folder
+  --dry-run             Preview migration without modifying files
+  --mails-only          Only migrate emails
+  --calendar-only       Only export calendar events
+  --contacts-only       Only export contacts
 ```
 
 ---
 
-## 📖 Importing Calendars & Contacts into Thunderbird
+## 📖 Importing Calendars & Contacts
 
-After running the script, your calendar and contact files are saved in:
+After running the migrator, calendar and contact files are stored in:
 `Documents/Thunderbird Migration/`
 
-### To Import Calendar:
-1. In Thunderbird, switch to the **Calendar** tab (or press `Ctrl+Shift+C`).
-2. Go to **Events and Tasks** ➔ **Import...**
-3. Select `eMClient_All_Calendars.ics` and choose your calendar.
-
-### To Import Contacts:
-1. In Thunderbird, open the **Address Book** (or press `Ctrl+Shift+B`).
-2. Click **Tools** ➔ **Import**.
-3. Choose **vCard file (.vcf)** and select `eMClient_All_Contacts.vcf`.
-
----
-
-## 🏗️ How It Works
-
-```mermaid
-flowchart TD
-    EM[eM Client Data<br/>accounts.dat, mail_data.dat, etc.] --> Parser[migrate.py Engine]
-    Parser --> P1[Account Settings Engine]
-    Parser --> P2[MIME Reconstructor & MBOX Writer]
-    Parser --> P3[Unified Folders Synthesizer]
-    Parser --> P4[iCal / vCard Exporter]
-    
-    P1 --> TB_Prefs[Thunderbird prefs.js]
-    P2 --> TB_Mail[Thunderbird ImapMail & Local Folders]
-    P3 --> TB_VF[virtualFolders.dat & folderCache.json]
-    P4 --> Docs[Documents/Thunderbird Migration/ .ics & .vcf]
-```
-
-1. **eM Client Storage**: eM Client stores data across SQLite databases (`accounts.dat`, `mail_data.dat`, `mail_index.dat`, `event_data.dat`, `contact_index.dat`).
-2. **MIME Reconstruction**: Email bodies and attachments in eM Client are split into MIME parts inside `LocalMailContents`. The migrator reassembles the boundary structures, body parts, and attachments into standard RFC 822 emails.
-3. **MBOX Deployment**: Writes standard MboxRD format with `X-Mozilla-Status` headers directly into Thunderbird's profile.
-4. **Unified Indexing**: Synthesizes the search scopes in `virtualFolders.dat` so Thunderbird's Unified Folders immediately display all accounts.
-
----
-
-## 💻 Supported Platforms
-
-- **Windows 10 / 11** (eM Client 7, 8, 9, 10, 11 beta)
-- **macOS** (eM Client for Mac)
-- Python 3.8, 3.9, 3.10, 3.11, 3.12, 3.13, 3.14+
+- **Thunderbird Calendar**: Switch to Calendar tab (`Ctrl+Shift+C`) ➔ `Events and Tasks` ➔ `Import...` ➔ select `eMClient_All_Calendars.ics`.
+- **Thunderbird Contacts**: Open Address Book (`Ctrl+Shift+B`) ➔ `Tools` ➔ `Import` ➔ choose **vCard file (.vcf)** ➔ select `eMClient_All_Contacts.vcf`.
+- **Outlook**: `File` ➔ `Open & Export` ➔ `Open Calendar (.ics)` or import vCards.
 
 ---
 
 ## 📄 License
 
-This project is licensed under the [MIT License](LICENSE). You are free to use, modify, and distribute it.
+This project is licensed under the [MIT License](LICENSE).
+Feel free to use, modify, and distribute it!

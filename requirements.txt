@@ -1,0 +1,7 @@
+# eM Client Universal Migrator Requirements
+#
+# Core migration to Mozilla Thunderbird and Standalone Export requires
+# ZERO external dependencies (uses Python 3 standard library only).
+#
+# Optional: Required ONLY if migrating directly to Microsoft Outlook on Windows via MAPI COM:
+pywin32>=306; sys_platform == 'win32'
