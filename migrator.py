@@ -565,6 +565,201 @@ class ThunderbirdTarget:
         with open(prefs_file, 'w', encoding='utf-8') as f:
             f.writelines(updated_lines)
 
+    def get_server_map(self):
+        prefs_file = self.profile / 'prefs.js'
+        if not prefs_file.exists():
+            return {}
+        with open(prefs_file, 'r', encoding='utf-8', errors='ignore') as f:
+            text = f.read()
+
+        srv_users = dict(re.findall(r'user_pref\("mail\.server\.(server\d+)\.userName", "([^"]+)"\);', text))
+        srv_dirs = dict(re.findall(r'user_pref\("mail\.server\.(server\d+)\.directory", "([^"]+)"\);', text))
+        srv_hosts = dict(re.findall(r'user_pref\("mail\.server\.(server\d+)\.hostname", "([^"]+)"\);', text))
+        srv_types = dict(re.findall(r'user_pref\("mail\.server\.(server\d+)\.type", "([^"]+)"\);', text))
+
+        server_map = {}
+        for s_id, s_dir in srv_dirs.items():
+            user = srv_users.get(s_id, 'N/A')
+            host = srv_hosts.get(s_id, 'N/A')
+            stype = srv_types.get(s_id, 'N/A')
+            if user != 'nobody':
+                server_map[user] = {
+                    'server_id': s_id,
+                    'type': stype,
+                    'user': user,
+                    'host': host,
+                    'dir': s_dir.replace('\\\\', '\\')
+                }
+        return server_map
+
+    def get_account_mbox_dir(self, acc_name):
+        smap = self.get_server_map()
+        if acc_name in smap:
+            p = Path(smap[acc_name]['dir'])
+            p.mkdir(parents=True, exist_ok=True)
+            return p
+        p = self.profile / 'Mail' / 'Local Folders' / 'eM Client Migration.sbd' / f"{clean_filename(acc_name)}.sbd"
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+
+    def update_unified_folders(self):
+        smap = self.get_server_map()
+        if not smap:
+            return
+        inbox_scopes, sent_scopes, trash_scopes, junk_scopes, draft_scopes, all_tree = [], [], [], [], [], []
+        fc_file = self.profile / 'folderCache.json'
+        try:
+            with open(fc_file, 'r', encoding='utf-8') as f:
+                folder_cache = json.load(f)
+        except Exception:
+            folder_cache = {}
+
+        for user, info in smap.items():
+            stype = info['type']
+            host = info['host']
+            tdir = Path(info['dir'])
+            tdir.mkdir(parents=True, exist_ok=True)
+            escaped_user = quote(user)
+            base_uri = f"imap://{escaped_user}@{host}" if stype == 'imap' else f"mailbox://{escaped_user}@{host}"
+            all_tree.append(base_uri)
+
+            # 1. INBOX
+            inbox_name = 'INBOX' if stype == 'imap' else 'Inbox'
+            inbox_f = tdir / inbox_name
+            if not inbox_f.exists(): inbox_f.touch()
+            inbox_msf = tdir / f"{inbox_name}.msf"
+            if not inbox_msf.exists(): inbox_msf.touch()
+            folder_cache[str(inbox_msf)] = {'flags': FLAGS_INBOX, 'onlineName': inbox_name, 'totalMsgs': -1, 'totalUnreadMsgs': -1, 'folderSize': inbox_f.stat().st_size}
+            inbox_uri = f"{base_uri}/{inbox_name}"
+            inbox_scopes.append(inbox_uri)
+            all_tree.append(inbox_uri)
+
+            # 2. Sent
+            sent_f = tdir / 'Sent'
+            if not sent_f.exists(): sent_f.touch()
+            sent_msf = tdir / 'Sent.msf'
+            if not sent_msf.exists(): sent_msf.touch()
+            folder_cache[str(sent_msf)] = {'flags': FLAGS_SENT, 'onlineName': 'Sent', 'totalMsgs': -1, 'totalUnreadMsgs': -1, 'folderSize': sent_f.stat().st_size}
+            sent_uri = f"{base_uri}/Sent"
+            sent_scopes.append(sent_uri)
+            all_tree.append(sent_uri)
+
+            # 3. Trash / Deleted
+            trash_name = 'Deleted' if 'outlook.office365.com' in host else 'Trash'
+            trash_f = tdir / trash_name
+            if not trash_f.exists(): trash_f.touch()
+            trash_msf = tdir / f"{trash_name}.msf"
+            if not trash_msf.exists(): trash_msf.touch()
+            folder_cache[str(trash_msf)] = {'flags': FLAGS_TRASH, 'onlineName': trash_name, 'totalMsgs': -1, 'totalUnreadMsgs': -1, 'folderSize': trash_f.stat().st_size}
+            trash_uri = f"{base_uri}/{trash_name}"
+            trash_scopes.append(trash_uri)
+            all_tree.append(trash_uri)
+
+            # 4. Junk / Spam / Bulk
+            junk_name = 'Bulk' if 'yahoo' in host else ('Spam' if 'spacemail' in host or 'wana' in host else 'Junk')
+            junk_f = tdir / junk_name
+            if not junk_f.exists(): junk_f.touch()
+            junk_msf = tdir / f"{junk_name}.msf"
+            if not junk_msf.exists(): junk_msf.touch()
+            folder_cache[str(junk_msf)] = {'flags': FLAGS_JUNK, 'onlineName': junk_name, 'totalMsgs': -1, 'totalUnreadMsgs': -1, 'folderSize': junk_f.stat().st_size}
+            junk_uri = f"{base_uri}/{junk_name}"
+            junk_scopes.append(junk_uri)
+            all_tree.append(junk_uri)
+
+            # 5. Drafts
+            draft_name = 'Draft' if 'yahoo' in host else 'Drafts'
+            draft_f = tdir / draft_name
+            if not draft_f.exists(): draft_f.touch()
+            draft_msf = tdir / f"{draft_name}.msf"
+            if not draft_msf.exists(): draft_msf.touch()
+            folder_cache[str(draft_msf)] = {'flags': FLAGS_DRAFTS, 'onlineName': draft_name, 'totalMsgs': -1, 'totalUnreadMsgs': -1, 'folderSize': draft_f.stat().st_size}
+            draft_uri = f"{base_uri}/{draft_name}"
+            draft_scopes.append(draft_uri)
+
+        with open(fc_file, 'w', encoding='utf-8') as f:
+            json.dump(folder_cache, f, indent=2)
+
+        vf_file = self.profile / 'virtualFolders.dat'
+        vf_content = f"""version=1
+uri=mailbox://nobody@smart%20mailboxes/tags/%24label1
+searchFolderFlag=1000
+scope=*
+terms=AND (tag,contains,$label1)
+searchOnline=false
+uri=mailbox://nobody@smart%20mailboxes/tags/%24label2
+searchFolderFlag=1000
+scope=*
+terms=AND (tag,contains,$label2)
+searchOnline=false
+uri=mailbox://nobody@smart%20mailboxes/tags/%24label3
+searchFolderFlag=1000
+scope=*
+terms=AND (tag,contains,$label3)
+searchOnline=false
+uri=mailbox://nobody@smart%20mailboxes/tags/%24label4
+searchFolderFlag=1000
+scope=*
+terms=AND (tag,contains,$label4)
+searchOnline=false
+uri=mailbox://nobody@smart%20mailboxes/tags/%24label5
+searchFolderFlag=1000
+scope=*
+terms=AND (tag,contains,$label5)
+searchOnline=false
+uri=mailbox://nobody@smart%20mailboxes/Inbox
+searchFolderFlag=1000
+scope={'|'.join(inbox_scopes)}
+terms=ALL
+searchOnline=false
+uri=mailbox://nobody@smart%20mailboxes/Drafts
+searchFolderFlag=400
+scope={'|'.join(draft_scopes)}
+terms=ALL
+searchOnline=false
+uri=mailbox://nobody@smart%20mailboxes/Sent
+searchFolderFlag=200
+scope={'|'.join(sent_scopes)}
+terms=ALL
+searchOnline=false
+uri=mailbox://nobody@smart%20mailboxes/Archives
+searchFolderFlag=4000
+scope=imap://dmtrsx%40yahoo.gr@imap.mail.yahoo.com/Archive
+terms=ALL
+searchOnline=false
+uri=mailbox://nobody@smart%20mailboxes/Junk
+searchFolderFlag=40000000
+scope={'|'.join(junk_scopes)}
+terms=ALL
+searchOnline=false
+uri=mailbox://nobody@smart%20mailboxes/Trash
+searchFolderFlag=100
+scope={'|'.join(trash_scopes)}|mailbox://nobody@Local%20Folders/Trash
+terms=ALL
+searchOnline=false
+"""
+        with open(vf_file, 'w', encoding='utf-8') as f:
+            f.write(vf_content)
+
+        ft_file = self.profile / 'folderTree.json'
+        smart_mailboxes = [
+            "mailbox://nobody@smart%20mailboxes",
+            "mailbox://nobody@smart%20mailboxes/Inbox",
+            "mailbox://nobody@smart%20mailboxes/Drafts",
+            "mailbox://nobody@smart%20mailboxes/Templates",
+            "mailbox://nobody@smart%20mailboxes/Sent",
+            "mailbox://nobody@smart%20mailboxes/Archives",
+            "mailbox://nobody@smart%20mailboxes/Junk",
+            "mailbox://nobody@smart%20mailboxes/Trash"
+        ]
+        folder_tree = {
+            "open": {
+                "all": list(set(all_tree + smart_mailboxes)),
+                "smart": list(set(smart_mailboxes + inbox_scopes + sent_scopes + trash_scopes + junk_scopes))
+            }
+        }
+        with open(ft_file, 'w', encoding='utf-8') as f:
+            json.dump(folder_tree, f, indent=2)
+
     def write_mbox_message(self, mbox_file_handle, msg_dict):
         recv_dt = msg_dict['received_date']
         date_str = recv_dt.strftime("%a %b %d %H:%M:%S %Y") if recv_dt else "Mon Oct 16 10:00:00 2026"
